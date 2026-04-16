@@ -26,10 +26,10 @@ st.title("Paramètres")
 
 # --- Section Planification -------------------------------------------------
 
-st.subheader("Rafraîchissement automatique")
+st.subheader("Mise à jour automatique")
 st.caption(
-    "Ajoute des jobs pour rafraîchir automatiquement certaines catégories à intervalle "
-    "régulier. Le scheduler tourne en arrière-plan tant que Streamlit est ouvert."
+    "Ajoute des tâches pour rafraîchir automatiquement certaines catégories à intervalle "
+    "régulier. Le planificateur tourne en arrière-plan tant que l'application est ouverte."
 )
 
 with st.form("add_job_form"):
@@ -153,9 +153,9 @@ st.divider()
 st.info(
     "• Les champs **état**, **magasin** et **commentaire vendeur** ne sont pas disponibles : "
     "Easycash ne les expose pas sur le web public.\n\n"
-    "• Le scheduler **s'arrête quand Streamlit se ferme** (voulu : exécution uniquement "
+    "• Le planificateur **s'arrête quand l'application se ferme** (voulu : exécution uniquement "
     "quand l'app tourne).\n\n"
-    "• La détection automatique de baisses + envoi Discord arrivent en phase 4."
+    "• La détection de baisses et les notifications Discord sont actives si le webhook est configuré."
 )
 
 sidebar_footer()

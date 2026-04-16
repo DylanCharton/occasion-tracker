@@ -18,7 +18,7 @@ st.set_page_config(page_title="Recherche — Easycash Tracker", layout="wide")
 
 ensure_db()
 st.title("Recherche")
-st.caption("Filtre le catalogue local (seuls les articles déjà scrapés sont visibles).")
+st.caption("Filtre le catalogue local (seuls les articles déjà collectés sont visibles).")
 
 # --- Filtres ---------------------------------------------------------------
 
@@ -75,7 +75,7 @@ if save_submitted:
         watch_id = watch.id
     st.success(
         f"✅ Recherche enregistrée (#{watch_id}). Tu recevras une alerte à chaque nouveau "
-        f"match lors des prochains scrapings."
+        f"match lors des prochaines analyses."
     )
 
 if submitted or True:  # on affiche aussi un premier écran par défaut
@@ -115,7 +115,7 @@ if submitted or True:  # on affiche aussi un premier écran par défaut
     st.caption(f"{len(rows)} résultat(s)")
 
     if not rows:
-        st.info("Aucun article ne correspond. Élargis les filtres ou lance un scraping depuis le Dashboard.")
+        st.info("Aucun article ne correspond. Élargis les filtres ou lance une collecte depuis le Dashboard.")
     else:
         for row in rows:
             cols = st.columns([5, 1, 1, 1, 2])

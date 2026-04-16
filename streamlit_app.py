@@ -87,21 +87,21 @@ st.divider()
 
 # --- Rafraîchissement manuel ----------------------------------------------
 
-st.subheader("Scraping complet (AJAX)")
+st.subheader("Analyse du catalogue")
 st.caption(
-    "Récupère **tous** les articles du catalogue Easycash via l'endpoint AJAX paginé. "
-    "Choisis les plateformes qui t'intéressent."
+    "Collecte **tous** les articles du catalogue Easycash pour les plateformes sélectionnées. "
+    "Les prix sont historisés à chaque passage."
 )
 
 DEFAULT_PLATFORMS = ["PS5", "PS4", "DS", "3DS", "Switch", "Switch 2"]
 selected_platforms = st.multiselect(
-    "Plateformes à scraper",
+    "Plateformes",
     options=AVAILABLE_PLATFORMS,
     default=[p for p in DEFAULT_PLATFORMS if p in AVAILABLE_PLATFORMS],
 )
 
-if st.button("Lancer le scraping", use_container_width=True, type="primary", disabled=not selected_platforms):
-    with st.spinner(f"Scraping de {len(selected_platforms)} plateforme(s)..."):
+if st.button("Lancer l'analyse", use_container_width=True, type="primary", disabled=not selected_platforms):
+    with st.spinner(f"Collecte de {len(selected_platforms)} plateforme(s) en cours..."):
         try:
             result = run_full_scrape(selected_platforms)
             st.success(
@@ -115,7 +115,7 @@ if st.button("Lancer le scraping", use_container_width=True, type="primary", dis
 st.divider()
 
 st.subheader("Rafraîchir une catégorie (vitrine)")
-st.caption("Scraping rapide de la vitrine Easycash (~30 articles par sous-catégorie).")
+st.caption("Collecte rapide de la vitrine Easycash (~30 articles par sous-catégorie).")
 
 with st.expander("Rafraîchissement rapide", expanded=False):
     with st.form("refresh_form"):
