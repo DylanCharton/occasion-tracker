@@ -1,4 +1,4 @@
-ok merci phase 4@echo off
+@echo off
 REM Lance Easycash Tracker (UI Streamlit + scheduler)
 cd /d "%~dp0"
 

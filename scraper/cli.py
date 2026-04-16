@@ -21,6 +21,7 @@ from scraper.config import settings
 from scraper.core.categories import CATEGORIES
 from scraper.db.repository import ArticleRepository
 from scraper.db.session import init_db, session_scope
+from scraper.services.full_scraper import scrape_full, AJAX_QUERIES_JEUX, ALL_AJAX_QUERIES
 from scraper.services.scraper_service import scrape_category
 
 app = typer.Typer(add_completion=False, help="Easycash Tracker — CLI de scraping")
@@ -52,7 +53,7 @@ def cmd_categories() -> None:
 @app.command("fetch")
 def cmd_fetch(
     category: str = typer.Argument(..., help="Slug de catégorie (ex: jeux-video, consoles/sony)"),
-    pages: int = typer.Option(3, "--pages", "-p", min=1, max=50, help="Nombre max de pages à parcourir"),
+    pages: int = typer.Option(2, "--pages", "-p", min=1, max=10, help="Pages par catégorie (2 suffit, Easycash répète au-delà)"),
 ) -> None:
     """Scrape une catégorie et persiste en base."""
     _configure_logs()
@@ -63,6 +64,47 @@ def cmd_fetch(
     typer.echo(f"=== Rapport {report.category} ===")
     typer.echo(f"  Pages fetchées : {report.pages_fetched}")
     typer.echo(f"  Articles vus   : {report.articles_seen}")
+    typer.echo(f"  Créés          : {report.articles_created}")
+    typer.echo(f"  Mis à jour     : {report.articles_updated}")
+    typer.echo(f"  Snapshots prix : {report.snapshots_written}")
+
+
+@app.command("fetch-all")
+def cmd_fetch_all(
+    pages: int = typer.Option(2, "--pages", "-p", min=1, max=10, help="Pages par catégorie (2 suffit)"),
+) -> None:
+    """Scrape TOUTES les catégories JV (consoles, jeux, rétro, accessoires)."""
+    _configure_logs()
+    init_db()
+    total_seen = 0
+    total_created = 0
+    for cat in CATEGORIES:
+        typer.echo(f"\n--- {cat.label} ({cat.slug}) ---")
+        report = asyncio.run(scrape_category(cat.slug, max_pages=pages))
+        total_seen += report.articles_seen
+        total_created += report.articles_created
+        typer.echo(
+            f"  {report.articles_seen} vus · {report.articles_created} créés · "
+            f"{report.snapshots_written} snapshots"
+        )
+    typer.echo(f"\n=== Total : {total_seen} articles vus, {total_created} nouveaux ===")
+
+
+@app.command("full")
+def cmd_full(
+    jeux_only: bool = typer.Option(False, "--jeux-only", "-j", help="Jeux vidéo uniquement (pas consoles/accessoires)"),
+) -> None:
+    """Scraping COMPLET via l'endpoint AJAX (toutes plateformes, tous articles)."""
+    _configure_logs()
+    init_db()
+    queries = AJAX_QUERIES_JEUX if jeux_only else ALL_AJAX_QUERIES
+    typer.echo(f"Lancement scraping complet ({len(queries)} plateformes)...")
+    report = asyncio.run(scrape_full(queries=queries))
+
+    typer.echo("")
+    typer.echo("=== Rapport scraping complet ===")
+    typer.echo(f"  Plateformes    : {report.queries_done}/{report.queries_total}")
+    typer.echo(f"  Articles uniques: {report.articles_unique}")
     typer.echo(f"  Créés          : {report.articles_created}")
     typer.echo(f"  Mis à jour     : {report.articles_updated}")
     typer.echo(f"  Snapshots prix : {report.snapshots_written}")

@@ -13,7 +13,8 @@
       "Bash(./.venv/Scripts/python.exe -m pip install -r requirements-dev.txt)",
       "Bash(./.venv/Scripts/python.exe -m pytest)",
       "Bash(./.venv/Scripts/python.exe:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(sort -t= -k2 -n -u)"
     ]
   }
 }

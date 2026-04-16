@@ -8,6 +8,7 @@ from scraper.config import settings
 from scraper.ui.helpers import (
     ArticleRepository,
     WatchRepository,
+    category_format,
     category_options,
     ensure_db,
     format_datetime,
@@ -33,11 +34,12 @@ st.caption(
 
 with st.form("add_job_form"):
     cols = st.columns([3, 1, 1, 1])
-    category = cols[0].selectbox("Catégorie", options=category_options())
+    category = cols[0].selectbox("Catégorie", options=category_options(), format_func=category_format)
     interval_hours = cols[1].number_input(
         "Intervalle (h)", min_value=1, max_value=168, value=settings.default_refresh_interval_hours, step=1
     )
-    max_pages = cols[2].number_input("Pages", min_value=1, max_value=30, value=3, step=1)
+    max_pages = cols[2].number_input("Pages", min_value=1, max_value=5, value=2, step=1,
+                                     help="2 pages suffit par catégorie (vitrine Easycash).")
     add_submitted = cols[3].form_submit_button("Ajouter / maj", use_container_width=True)
 
 if add_submitted:
@@ -51,6 +53,18 @@ if add_submitted:
         st.rerun()
     except Exception as exc:  # noqa: BLE001
         st.error(f"Erreur : {exc}")
+
+if st.button("Planifier toutes les catégories JV", use_container_width=True, help="Crée un job pour chacune des 11 catégories"):
+    count = 0
+    for cat in category_options():
+        scheduler.add_or_update(
+            category_slug=cat,
+            interval_hours=int(interval_hours),
+            max_pages=int(max_pages),
+        )
+        count += 1
+    st.success(f"✅ {count} jobs planifiés toutes les {interval_hours}h ({max_pages} pages/catégorie)")
+    st.rerun()
 
 # --- Liste des jobs --------------------------------------------------------
 

@@ -11,13 +11,16 @@ from scraper.ui.helpers import (
     AlertRepository,
     ArticleRepository,
     WatchRepository,
+    category_format,
     category_options,
     ensure_db,
     format_datetime,
     format_price,
     get_scheduler,
     price_change_pct,
+    run_full_scrape,
     run_scrape,
+    AVAILABLE_PLATFORMS,
     session_scope,
     sidebar_footer,
 )
@@ -84,25 +87,58 @@ st.divider()
 
 # --- Rafraîchissement manuel ----------------------------------------------
 
-st.subheader("Rafraîchir le catalogue")
-st.caption("Lance un scraping immédiat sur la catégorie choisie (mise à jour des prix et ajout de nouveaux articles).")
+st.subheader("Scraping complet (AJAX)")
+st.caption(
+    "Récupère **tous** les articles du catalogue Easycash via l'endpoint AJAX paginé. "
+    "Choisis les plateformes qui t'intéressent."
+)
 
-with st.form("refresh_form"):
-    col1, col2, col3 = st.columns([3, 1, 1])
-    category = col1.selectbox("Catégorie", options=category_options(), index=category_options().index("jeux-video"))
-    pages = col2.number_input("Pages", min_value=1, max_value=30, value=3, step=1)
-    submitted = col3.form_submit_button("Rafraîchir", use_container_width=True)
+DEFAULT_PLATFORMS = ["PS5", "PS4", "DS", "3DS", "Switch", "Switch 2"]
+selected_platforms = st.multiselect(
+    "Plateformes à scraper",
+    options=AVAILABLE_PLATFORMS,
+    default=[p for p in DEFAULT_PLATFORMS if p in AVAILABLE_PLATFORMS],
+)
 
-if submitted:
-    with st.spinner(f"Scraping de {category} ({pages} pages)…"):
+if st.button("Lancer le scraping", use_container_width=True, type="primary", disabled=not selected_platforms):
+    with st.spinner(f"Scraping de {len(selected_platforms)} plateforme(s)..."):
         try:
-            result = run_scrape(category, int(pages))
+            result = run_full_scrape(selected_platforms)
             st.success(
-                f"✅ {result['seen']} articles vus · {result['created']} nouveaux · "
-                f"{result['updated']} mis à jour · {result['snapshots']} snapshots de prix"
+                f"✅ **{result['unique']}** articles uniques · "
+                f"{result['created']} nouveaux · {result['updated']} mis à jour · "
+                f"{result['snapshots']} snapshots · {result['queries']} plateforme(s)"
             )
         except Exception as exc:
-            st.error(f"Erreur pendant le scraping : {exc}")
+            st.error(f"Erreur : {exc}")
+
+st.divider()
+
+st.subheader("Rafraîchir une catégorie (vitrine)")
+st.caption("Scraping rapide de la vitrine Easycash (~30 articles par sous-catégorie).")
+
+with st.expander("Rafraîchissement rapide", expanded=False):
+    with st.form("refresh_form"):
+        col1, col2 = st.columns([4, 1])
+        category = col1.selectbox(
+            "Catégorie",
+            options=category_options(),
+            index=category_options().index("jeux-video"),
+            format_func=category_format,
+        )
+        pages = col2.number_input("Pages", min_value=1, max_value=5, value=2, step=1)
+        submitted = st.form_submit_button("Rafraîchir", use_container_width=True)
+
+    if submitted:
+        with st.spinner(f"Scraping de {category}..."):
+            try:
+                result = run_scrape(category, int(pages))
+                st.success(
+                    f"✅ **{result['unique']}** articles uniques · "
+                    f"{result['created']} nouveaux · {result['updated']} mis à jour"
+                )
+            except Exception as exc:
+                st.error(f"Erreur : {exc}")
 
 st.divider()
 

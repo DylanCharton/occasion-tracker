@@ -9,7 +9,7 @@ from typing import Iterable
 import streamlit as st
 
 from scraper.config import settings
-from scraper.core.categories import CATEGORIES
+from scraper.core.categories import CATEGORIES, CATEGORIES_BY_SLUG
 from scraper.db.models import Article, PriceSnapshot
 from scraper.db.repository import (
     AlertRepository,
@@ -19,6 +19,8 @@ from scraper.db.repository import (
 )
 from scraper.db.session import init_db, session_scope
 from scraper.services.scheduler_service import SchedulerService
+from scraper.core.ajax import AVAILABLE_PLATFORMS, queries_for_platforms
+from scraper.services.full_scraper import scrape_full, FullScrapeReport
 from scraper.services.scraper_service import scrape_category
 
 
@@ -62,16 +64,31 @@ def price_change_pct(first_cents: int | None, last_cents: int | None) -> float |
     return (last_cents - first_cents) / first_cents
 
 
+def run_full_scrape(platforms: list[str] | None = None) -> dict:
+    """Lance un scraping AJAX (plateformes choisies ou toutes)."""
+    queries = queries_for_platforms(platforms) if platforms else None
+    report = asyncio.run(scrape_full(queries=queries))
+    return {
+        "unique": report.articles_unique,
+        "created": report.articles_created,
+        "updated": report.articles_updated,
+        "snapshots": report.snapshots_written,
+        "queries": report.queries_done,
+    }
+
+
 def run_scrape(category_slug: str, pages: int) -> dict:
     """Lance un scraping synchrone depuis Streamlit."""
     report = asyncio.run(scrape_category(category_slug, max_pages=pages))
     return {
         "category": report.category,
         "pages": report.pages_fetched,
-        "seen": report.articles_seen,
+        "unique": report.articles_unique,
         "created": report.articles_created,
         "updated": report.articles_updated,
         "snapshots": report.snapshots_written,
+        "skipped_dup": report.articles_skipped_dup,
+        "stopped_reason": report.stopped_reason,
     }
 
 
@@ -84,6 +101,14 @@ def category_label(slug: str) -> str:
         if c.slug == slug:
             return c.label
     return slug
+
+
+def category_format(slug: str) -> str:
+    """Renvoie 'label (slug)' pour les selectbox."""
+    cat = CATEGORIES_BY_SLUG.get(slug)
+    if cat is None:
+        return slug
+    return f"{cat.label}  —  {slug}"
 
 
 def sidebar_footer() -> None:
