@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.easycash.fr)",
+      "WebFetch(domain:bons-plans.easycash.fr)",
+      "WebFetch(domain:magasins.easycash.fr)",
+      "WebFetch(domain:webshop.easycash.fr)",
+      "WebFetch(domain:shop.easycash.fr)",
+      "WebFetch(domain:boutique.easycash.fr)",
+      "Bash(py --version)",
+      "Bash(py -m venv .venv)",
+      "Bash(.venv/Scripts/python.exe -m pip install --upgrade pip --quiet)",
+      "Bash(./.venv/Scripts/python.exe -m pip install -r requirements-dev.txt)",
+      "Bash(./.venv/Scripts/python.exe -m pytest)",
+      "Bash(./.venv/Scripts/python.exe:*)",
+      "Bash(curl:*)"
+    ]
+  }
+}
