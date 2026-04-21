@@ -25,9 +25,17 @@ from scraper.services.full_scraper import scrape_full, FullScrapeReport
 from scraper.services.scraper_service import scrape_category
 
 
-def ensure_db() -> None:
-    """Initialise la DB (idempotent) au démarrage d'une page."""
+@st.cache_resource(show_spinner=False)
+def _db_initialized() -> bool:
+    """Exécute init_db() une seule fois par process (évite l'introspection
+    schéma à chaque rerun — très coûteuse sur Supabase)."""
     init_db()
+    return True
+
+
+def ensure_db() -> None:
+    """Initialise la DB (idempotent, cachée au niveau process)."""
+    _db_initialized()
 
 
 def is_demo_mode() -> bool:
