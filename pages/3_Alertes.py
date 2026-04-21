@@ -99,8 +99,9 @@ cols[2].metric("Envoyées Discord", sum(1 for r in rows if r["sent_discord"]))
 
 st.divider()
 
-for r in rows:
-    bg = None if r["read"] else "blue"
+@st.fragment
+def render_alert(r: dict) -> None:
+    """Fragment isolé : clic sur Envoyer/Marquer lu ne rerun que cette alerte."""
     with st.container(border=True):
         cols = st.columns([5, 1, 1, 1])
         title = r["article_title"] or "(article inconnu)"
@@ -138,9 +139,10 @@ for r in rows:
                 ok = resend_to_discord(r["id"])
                 if ok:
                     st.toast("Envoyé sur Discord", icon="✅")
+                    r["sent_discord"] = True
                 else:
                     st.toast("Échec Discord (vérifie le webhook)", icon="⚠️")
-                st.rerun()
+                st.rerun(scope="fragment")
         if not r["read"]:
             if action_cols[4].button(
                 "Marquer lu",
@@ -150,8 +152,13 @@ for r in rows:
                 help=ro_help,
             ):
                 mark_as_read(r["id"])
-                st.rerun()
+                r["read"] = True
+                st.rerun(scope="fragment")
         else:
             action_cols[4].caption("✓ lue")
+
+
+for r in rows:
+    render_alert(r)
 
 sidebar_footer()

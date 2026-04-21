@@ -129,7 +129,10 @@ if submitted or True:  # on affiche aussi un premier écran par défaut
     if not rows:
         st.info("Aucun article ne correspond. Élargis les filtres ou lance une collecte depuis le Dashboard.")
     else:
-        for row in rows:
+        @st.fragment
+        def render_row(row: dict) -> None:
+            """Chaque ligne est un fragment isolé : cliquer Suivre ne rerun que cette ligne,
+            pas toute la page (pas de re-requête search + pas de re-render des 50 lignes)."""
             cols = st.columns([5, 1, 1, 1, 2])
             plat = f" [{row['platform']}]" if row["platform"] else ""
             cols[0].markdown(f"**[{row['title']}]({row['url']})**{plat}")
@@ -148,6 +151,10 @@ if submitted or True:  # on affiche aussi un premier écran par défaut
                     with session_scope() as session:
                         watch_repo = WatchRepository(session, user_id=uid)
                         watch_repo.add_article_watch(row["id"])
-                    st.rerun()
+                    row["watched"] = True
+                    st.rerun(scope="fragment")
+
+        for row in rows:
+            render_row(row)
 
 sidebar_footer()
