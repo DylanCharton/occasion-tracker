@@ -9,6 +9,8 @@ from scraper.ui.helpers import (
     WatchRepository,
     category_options,
     current_user_id,
+    distinct_categories_cached,
+    distinct_platforms_cached,
     ensure_db,
     format_price,
     is_readonly,
@@ -27,10 +29,8 @@ st.caption("Filtre le catalogue local (seuls les articles déjà collectés sont
 
 # --- Filtres ---------------------------------------------------------------
 
-with session_scope() as session:
-    repo = ArticleRepository(session)
-    all_categories = repo.distinct_categories()
-    all_platforms = repo.distinct_platforms()
+all_categories = distinct_categories_cached()
+all_platforms = distinct_platforms_cached()
 
 with st.form("search_form"):
     col1, col2, col3 = st.columns([3, 2, 2])
@@ -41,7 +41,7 @@ with st.form("search_form"):
     )
     platform = col3.selectbox("Plateforme", options=["(toutes)"] + all_platforms)
 
-    col4, col5, col6, col7 = st.columns([2, 2, 2, 2])
+    col4, col5, col6, col7, col8 = st.columns([2, 2, 2, 1, 1])
     min_price = col4.number_input("Prix min (€)", min_value=0.0, value=0.0, step=1.0)
     max_price = col5.number_input("Prix max (€)", min_value=0.0, value=0.0, step=1.0, help="0 = pas de max")
     order_by = col6.selectbox(
@@ -55,7 +55,8 @@ with st.form("search_form"):
             "first_seen_desc": "Nouveaux d'abord",
         }[v],
     )
-    only_active = col7.checkbox("Actifs uniquement", value=True)
+    result_limit = col7.selectbox("Max", options=[25, 50, 100, 200], index=1)
+    only_active = col8.checkbox("Actifs", value=True)
     cols_btn = st.columns([1, 1])
     submitted = cols_btn[0].form_submit_button("Rechercher", use_container_width=True)
     save_submitted = cols_btn[1].form_submit_button(
@@ -96,7 +97,7 @@ if submitted or True:  # on affiche aussi un premier écran par défaut
             min_price_cents=int(min_price * 100) if min_price > 0 else None,
             max_price_cents=int(max_price * 100) if max_price > 0 else None,
             only_active=only_active,
-            limit=200,
+            limit=int(result_limit),
             order_by=order_by,
         )
 

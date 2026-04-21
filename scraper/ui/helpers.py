@@ -218,6 +218,20 @@ def dashboard_data(user_id: int) -> dict:
     }
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def distinct_categories_cached() -> list[str]:
+    """Liste des catégories en base, cachée 5 min."""
+    with session_scope() as session:
+        return ArticleRepository(session).distinct_categories()
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def distinct_platforms_cached() -> list[str]:
+    """Liste des plateformes en base, cachée 5 min."""
+    with session_scope() as session:
+        return ArticleRepository(session).distinct_platforms()
+
+
 @st.cache_data(ttl=60, show_spinner=False)
 def next_runs_view(limit: int = 5) -> list[dict]:
     """Cache 60s des prochaines exécutions planifiées (évite un roundtrip DB)."""
@@ -338,6 +352,8 @@ __all__ = [
     "current_user",
     "current_user_id",
     "dashboard_data",
+    "distinct_categories_cached",
+    "distinct_platforms_cached",
     "next_runs_view",
     "is_admin",
     "is_demo_mode",
