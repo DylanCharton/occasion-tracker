@@ -182,13 +182,16 @@ if selected_article_id is not None:
 # --- Liste watchlist -------------------------------------------------------
 
 with session_scope() as session:
-    watch_repo = WatchRepository(session)
+    watch_repo = WatchRepository(session, user_id=uid)
     repo = ArticleRepository(session)
     pairs = watch_repo.list_article_watches()
+    article_ids = [art.id for _, art in pairs]
+    last_snaps = repo.last_snapshots_by_ids(article_ids)
+    first_snaps = repo.first_snapshots_by_ids(article_ids)
     rows = []
     for watch, art in pairs:
-        last = repo.last_snapshot(art.id)
-        first = repo.first_snapshot(art.id)
+        last = last_snaps.get(art.id)
+        first = first_snaps.get(art.id)
         pct = price_change_pct(first.price_cents if first else None, last.price_cents if last else None)
         rows.append(
             {

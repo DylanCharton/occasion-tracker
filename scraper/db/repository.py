@@ -187,6 +187,37 @@ class ArticleRepository:
 
     # ------------------------------------------------------------------ Snapshots
 
+    def last_snapshots_by_ids(self, article_ids: Iterable[int]) -> dict[int, PriceSnapshot]:
+        """Retourne le dernier snapshot pour une liste d'article_ids, en 1 requête.
+
+        Évite le N+1 : au lieu d'appeler `last_snapshot(id)` dans une boucle,
+        on récupère tous les snapshots en une requête avec une sous-requête
+        MAX(scraped_at) par article.
+        """
+        ids = list(article_ids)
+        if not ids:
+            return {}
+        last_sq = (
+            select(
+                PriceSnapshot.article_id.label("aid"),
+                func.max(PriceSnapshot.scraped_at).label("last"),
+            )
+            .where(PriceSnapshot.article_id.in_(ids))
+            .group_by(PriceSnapshot.article_id)
+            .subquery()
+        )
+        stmt = (
+            select(PriceSnapshot)
+            .join(
+                last_sq,
+                and_(
+                    PriceSnapshot.article_id == last_sq.c.aid,
+                    PriceSnapshot.scraped_at == last_sq.c.last,
+                ),
+            )
+        )
+        return {s.article_id: s for s in self.session.scalars(stmt)}
+
     def last_snapshot(self, article_id: int) -> PriceSnapshot | None:
         stmt = (
             select(PriceSnapshot)
@@ -195,6 +226,32 @@ class ArticleRepository:
             .limit(1)
         )
         return self.session.scalar(stmt)
+
+    def first_snapshots_by_ids(self, article_ids: Iterable[int]) -> dict[int, PriceSnapshot]:
+        """Premier snapshot pour une liste d'article_ids, en 1 requête."""
+        ids = list(article_ids)
+        if not ids:
+            return {}
+        first_sq = (
+            select(
+                PriceSnapshot.article_id.label("aid"),
+                func.min(PriceSnapshot.scraped_at).label("first"),
+            )
+            .where(PriceSnapshot.article_id.in_(ids))
+            .group_by(PriceSnapshot.article_id)
+            .subquery()
+        )
+        stmt = (
+            select(PriceSnapshot)
+            .join(
+                first_sq,
+                and_(
+                    PriceSnapshot.article_id == first_sq.c.aid,
+                    PriceSnapshot.scraped_at == first_sq.c.first,
+                ),
+            )
+        )
+        return {s.article_id: s for s in self.session.scalars(stmt)}
 
     def first_snapshot(self, article_id: int) -> PriceSnapshot | None:
         stmt = (
@@ -377,6 +434,16 @@ class WatchRepository:
         for w in watches:
             w.active = False
         return len(watches)
+
+    def watched_article_ids(self) -> set[int]:
+        """IDs des articles suivis par le user courant, en 1 requête."""
+        stmt = select(Watch.article_id).where(
+            Watch.user_id == self.user_id,
+            Watch.type == WatchType.ARTICLE.value,
+            Watch.active.is_(True),
+            Watch.article_id.is_not(None),
+        )
+        return {aid for aid in self.session.scalars(stmt) if aid is not None}
 
     def is_watched(self, article_id: int) -> bool:
         stmt = select(func.count()).select_from(Watch).where(

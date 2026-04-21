@@ -100,10 +100,14 @@ if submitted or True:  # on affiche aussi un premier écran par défaut
             order_by=order_by,
         )
 
+        # Batch : 2 requêtes au lieu de 2×N pour éviter le N+1 sur Supabase
+        article_ids = [art.id for art in results]
+        last_snaps = repo.last_snapshots_by_ids(article_ids)
+        watched_ids = watch_repo.watched_article_ids()
+
         rows = []
         for art in results:
-            last = repo.last_snapshot(art.id)
-            watched = watch_repo.is_watched(art.id)
+            last = last_snaps.get(art.id)
             rows.append(
                 {
                     "id": art.id,
@@ -115,7 +119,7 @@ if submitted or True:  # on affiche aussi un premier écran par défaut
                     "price_cents": last.price_cents if last else None,
                     "last_seen_at": art.last_seen_at,
                     "active": art.active,
-                    "watched": watched,
+                    "watched": art.id in watched_ids,
                 }
             )
 
