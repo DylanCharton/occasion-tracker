@@ -23,7 +23,7 @@ from scraper.ui.helpers import (
     sidebar_footer,
 )
 
-st.set_page_config(page_title="Paramètres — Easycash Tracker", layout="wide")
+st.set_page_config(page_title="Paramètres — Occasion Tracker", layout="wide")
 
 ensure_db()
 require_auth()
@@ -97,7 +97,7 @@ with st.form("add_job_form"):
     )
     max_pages = cols[2].number_input(
         "Pages", min_value=1, max_value=5, value=2, step=1,
-        help="2 pages suffit par catégorie (vitrine Easycash).",
+        help="2 pages suffit par catégorie (vitrine du site).",
     )
     add_submitted = cols[3].form_submit_button("Ajouter / maj", use_container_width=True)
 
@@ -113,11 +113,11 @@ if add_submitted:
     except Exception as exc:  # noqa: BLE001
         st.error(f"Erreur : {exc}")
 
-with st.expander("Ajouter un slug Easycash non listé", expanded=False):
+with st.expander("Ajouter un slug non listé", expanded=False):
     st.caption(
         "Pour scraper une catégorie hors liste prédéfinie (ex: `meubles`, "
         "`informatique/ordinateurs-portables`). Le slug doit correspondre à une URL "
-        "réelle `bons-plans.easycash.fr/<slug>`."
+        "réelle sur le site source."
     )
     with st.form("add_custom_job_form"):
         cols = st.columns([3, 1, 1, 1])

@@ -99,7 +99,7 @@ def require_auth() -> None:
         return
 
     if not _is_logged_in():
-        st.title("🔒 Easycash Tracker")
+        st.title("🔒 Occasion Tracker")
         st.markdown(
             "Cette application est réservée à un cercle privé. "
             "Connecte-toi avec ton compte Google pour y accéder."
@@ -158,6 +158,71 @@ def current_user() -> User:
 def is_admin() -> bool:
     _, _, admin = _user_snapshot(_resolve_email())
     return admin
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def dashboard_data(user_id: int) -> dict:
+    """Pré-calcule les données du dashboard (cache 60s, scopé par user).
+
+    Regroupe toutes les requêtes DB du dashboard en une seule fonction cachée
+    pour éviter la latence Supabase (15+ roundtrips par rerun).
+    """
+    with session_scope() as session:
+        repo = ArticleRepository(session)
+        watch_repo = WatchRepository(session, user_id=user_id)
+        alert_repo = AlertRepository(session, user_id=user_id)
+
+        total_articles = repo.count()
+        total_watches = watch_repo.count_active()
+        total_unread_alerts = alert_repo.count_unread()
+        recent_drops = repo.recent_price_drops(limit=10)
+        recent_articles = repo.list_recent(limit=10)
+
+        drops_view = [
+            {
+                "title": article.title,
+                "url": article.url,
+                "platform": article.platform,
+                "prev": prev.price_cents,
+                "latest": latest.price_cents,
+                "scraped_at": latest.scraped_at,
+            }
+            for article, prev, latest in recent_drops
+        ]
+        recents_view = [
+            {
+                "ext_ref": art.ext_ref,
+                "title": art.title,
+                "platform": art.platform,
+                "url": art.url,
+                "last_seen_at": art.last_seen_at,
+                "price": (repo.last_snapshot(art.id).price_cents if repo.last_snapshot(art.id) else None),
+            }
+            for art in recent_articles
+        ]
+
+    return {
+        "total_articles": total_articles,
+        "total_watches": total_watches,
+        "total_unread_alerts": total_unread_alerts,
+        "drops_view": drops_view,
+        "recents_view": recents_view,
+    }
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def next_runs_view(limit: int = 5) -> list[dict]:
+    """Cache 60s des prochaines exécutions planifiées (évite un roundtrip DB)."""
+    jobs = SchedulerService.get().next_runs(limit=limit)
+    return [
+        {
+            "category_slug": j.category_slug,
+            "interval_hours": j.interval_hours,
+            "max_pages": j.max_pages,
+            "next_run_at": j.next_run_at,
+        }
+        for j in jobs
+    ]
 
 
 @st.cache_resource(show_spinner=False)
@@ -254,13 +319,18 @@ def sidebar_footer() -> None:
         if _is_logged_in():
             if st.sidebar.button("Se déconnecter", use_container_width=True):
                 st.logout()
-    st.sidebar.caption(f"Easycash Tracker — {settings.base_url}")
+    if user.is_admin and not is_demo_mode():
+        st.sidebar.caption(f"Occasion Tracker — {settings.base_url}")
+    else:
+        st.sidebar.caption("Occasion Tracker")
 
 
 __all__ = [
     "ensure_db",
     "current_user",
     "current_user_id",
+    "dashboard_data",
+    "next_runs_view",
     "is_admin",
     "is_demo_mode",
     "is_readonly",

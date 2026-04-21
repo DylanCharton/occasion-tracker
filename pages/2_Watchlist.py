@@ -20,7 +20,7 @@ from scraper.ui.helpers import (
     sidebar_footer,
 )
 
-st.set_page_config(page_title="Watchlist — Easycash Tracker", layout="wide")
+st.set_page_config(page_title="Watchlist — Occasion Tracker", layout="wide")
 
 ensure_db()
 require_auth()
