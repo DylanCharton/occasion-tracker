@@ -11,7 +11,9 @@ data/*.db-journal
 data/*.sqlite3
 logs/
 .pytest_cache/
-.streamlit/
+.streamlit/*
+!.streamlit/secrets.toml.example
+!.streamlit/config.toml
 .vscode/
 .idea/
 *.egg-info/

@@ -21,6 +21,7 @@ from scraper.db.models import (
     Article,
     PriceSnapshot,
     ScheduledJob,
+    User,
     Watch,
     WatchType,
     utcnow,
@@ -271,10 +272,15 @@ class ArticleRepository:
 
 
 class WatchRepository:
-    """Gestion de la watchlist : articles suivis et alertes-recherche."""
+    """Gestion de la watchlist : articles suivis et alertes-recherche.
 
-    def __init__(self, session: Session) -> None:
+    Toutes les opérations sont scopées à un `user_id`. Deux utilisateurs
+    distincts peuvent avoir chacun une watch sur le même article.
+    """
+
+    def __init__(self, session: Session, user_id: int) -> None:
         self.session = session
+        self.user_id = user_id
 
     def add_article_watch(
         self,
@@ -283,9 +289,10 @@ class WatchRepository:
         threshold_price_cents: int | None = None,
         threshold_drop_pct: float | None = None,
     ) -> Watch:
-        """Ajoute un article à la watchlist (idempotent)."""
+        """Ajoute un article à la watchlist du user courant (idempotent)."""
         existing = self.session.scalar(
             select(Watch).where(
+                Watch.user_id == self.user_id,
                 Watch.type == WatchType.ARTICLE.value,
                 Watch.article_id == article_id,
                 Watch.active.is_(True),
@@ -299,6 +306,7 @@ class WatchRepository:
             return existing
 
         watch = Watch(
+            user_id=self.user_id,
             type=WatchType.ARTICLE.value,
             article_id=article_id,
             threshold_price_cents=threshold_price_cents,
@@ -316,7 +324,7 @@ class WatchRepository:
         threshold_price_cents: int | None = None,
         threshold_drop_pct: float | None = None,
     ) -> Watch | None:
-        watch = self.session.get(Watch, watch_id)
+        watch = self._get_owned(watch_id)
         if watch is None:
             return None
         watch.threshold_price_cents = threshold_price_cents
@@ -326,6 +334,7 @@ class WatchRepository:
     def get_article_watch(self, article_id: int) -> Watch | None:
         return self.session.scalar(
             select(Watch).where(
+                Watch.user_id == self.user_id,
                 Watch.type == WatchType.ARTICLE.value,
                 Watch.article_id == article_id,
                 Watch.active.is_(True),
@@ -339,6 +348,7 @@ class WatchRepository:
         threshold_price_cents: int | None = None,
     ) -> Watch:
         watch = Watch(
+            user_id=self.user_id,
             type=WatchType.SEARCH.value,
             query_json=json.dumps(query, ensure_ascii=False),
             threshold_price_cents=threshold_price_cents,
@@ -349,15 +359,16 @@ class WatchRepository:
         return watch
 
     def remove(self, watch_id: int) -> bool:
-        watch = self.session.get(Watch, watch_id)
+        watch = self._get_owned(watch_id)
         if watch is None:
             return False
         watch.active = False
         return True
 
     def remove_article(self, article_id: int) -> int:
-        """Désactive toutes les watches d'article pointant vers cet article."""
+        """Désactive les watches du user courant pointant vers cet article."""
         stmt = select(Watch).where(
+            Watch.user_id == self.user_id,
             Watch.type == WatchType.ARTICLE.value,
             Watch.article_id == article_id,
             Watch.active.is_(True),
@@ -369,6 +380,7 @@ class WatchRepository:
 
     def is_watched(self, article_id: int) -> bool:
         stmt = select(func.count()).select_from(Watch).where(
+            Watch.user_id == self.user_id,
             Watch.type == WatchType.ARTICLE.value,
             Watch.article_id == article_id,
             Watch.active.is_(True),
@@ -379,7 +391,11 @@ class WatchRepository:
         stmt = (
             select(Watch, Article)
             .join(Article, Article.id == Watch.article_id)
-            .where(Watch.type == WatchType.ARTICLE.value, Watch.active.is_(True))
+            .where(
+                Watch.user_id == self.user_id,
+                Watch.type == WatchType.ARTICLE.value,
+                Watch.active.is_(True),
+            )
             .order_by(Watch.created_at.desc())
         )
         return [(w, a) for w, a in self.session.execute(stmt).all()]
@@ -387,23 +403,44 @@ class WatchRepository:
     def list_search_watches(self) -> list[Watch]:
         stmt = (
             select(Watch)
-            .where(Watch.type == WatchType.SEARCH.value, Watch.active.is_(True))
+            .where(
+                Watch.user_id == self.user_id,
+                Watch.type == WatchType.SEARCH.value,
+                Watch.active.is_(True),
+            )
             .order_by(Watch.created_at.desc())
         )
         return list(self.session.scalars(stmt))
 
     def count_active(self) -> int:
-        stmt = select(func.count()).select_from(Watch).where(Watch.active.is_(True))
+        stmt = select(func.count()).select_from(Watch).where(
+            Watch.user_id == self.user_id,
+            Watch.active.is_(True),
+        )
         return self.session.scalar(stmt) or 0
+
+    def _get_owned(self, watch_id: int) -> Watch | None:
+        """Retourne la watch seulement si elle appartient au user courant."""
+        return self.session.scalar(
+            select(Watch).where(Watch.id == watch_id, Watch.user_id == self.user_id)
+        )
 
 
 class AlertRepository:
-    def __init__(self, session: Session) -> None:
+    """Scopé à un user : on ne voit que ses propres alertes.
+
+    Passer user_id=None explicite pour un contexte système (scheduler,
+    detection) qui a besoin d'écrire/lire les alertes de tous les users.
+    """
+
+    def __init__(self, session: Session, user_id: int | None) -> None:
         self.session = session
+        self.user_id = user_id
 
     def create(
         self,
         *,
+        user_id: int,
         watch_id: int,
         type: AlertType,
         message: str,
@@ -412,6 +449,7 @@ class AlertRepository:
         previous_price_cents: int | None = None,
     ) -> Alert:
         alert = Alert(
+            user_id=user_id,
             watch_id=watch_id,
             type=type.value,
             message=message,
@@ -425,10 +463,15 @@ class AlertRepository:
 
     def list_recent(self, limit: int = 50) -> Sequence[Alert]:
         stmt = select(Alert).order_by(Alert.triggered_at.desc()).limit(limit)
+        if self.user_id is not None:
+            stmt = stmt.where(Alert.user_id == self.user_id)
         return list(self.session.scalars(stmt))
 
     def mark_read(self, alert_id: int) -> bool:
-        alert = self.session.get(Alert, alert_id)
+        stmt = select(Alert).where(Alert.id == alert_id)
+        if self.user_id is not None:
+            stmt = stmt.where(Alert.user_id == self.user_id)
+        alert = self.session.scalar(stmt)
         if alert is None:
             return False
         alert.read = True
@@ -436,7 +479,39 @@ class AlertRepository:
 
     def count_unread(self) -> int:
         stmt = select(func.count()).select_from(Alert).where(Alert.read.is_(False))
+        if self.user_id is not None:
+            stmt = stmt.where(Alert.user_id == self.user_id)
         return self.session.scalar(stmt) or 0
+
+
+class UserRepository:
+    """Get-or-create par email (flux SSO Streamlit Cloud)."""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def get_by_email(self, email: str) -> User | None:
+        return self.session.scalar(select(User).where(User.email == email.lower()))
+
+    def get_or_create(self, email: str, *, is_admin: bool = False) -> User:
+        email_norm = email.lower().strip()
+        user = self.get_by_email(email_norm)
+        if user is not None:
+            return user
+        user = User(email=email_norm, is_admin=is_admin)
+        self.session.add(user)
+        self.session.flush()
+        return user
+
+    def set_discord_webhook(self, user_id: int, url: str | None) -> User | None:
+        user = self.session.get(User, user_id)
+        if user is None:
+            return None
+        user.discord_webhook_url = url or None
+        return user
+
+    def list_all(self) -> Sequence[User]:
+        return list(self.session.scalars(select(User).order_by(User.email.asc())))
 
 
 class ScheduledJobRepository:

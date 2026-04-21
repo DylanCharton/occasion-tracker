@@ -16,7 +16,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from scraper.config import settings
-from scraper.db.models import Alert, AlertType, Article, PriceSnapshot, Watch, WatchType, utcnow
+from scraper.db.models import Alert, AlertType, Article, PriceSnapshot, User, Watch, WatchType, utcnow
 from scraper.db.repository import AlertRepository, ArticleRepository
 from scraper.db.session import session_scope
 from scraper.services.discord_notifier import send_alert
@@ -53,7 +53,8 @@ def detect_and_notify(ext_refs_seen: set[str] | None = None) -> DetectionReport:
             select(Watch).where(Watch.type == WatchType.ARTICLE.value, Watch.active.is_(True))
         ))
         art_repo = ArticleRepository(session)
-        alert_repo = AlertRepository(session)
+        # Contexte système : on écrit/lit les alertes de tous les users
+        alert_repo = AlertRepository(session, user_id=None)
 
         for watch in watches:
             article = art_repo.get(watch.article_id) if watch.article_id else None
@@ -104,6 +105,7 @@ def detect_and_notify(ext_refs_seen: set[str] | None = None) -> DetectionReport:
                 f"({-drop_pct:.1%})"
             )
             alert = alert_repo.create(
+                user_id=watch.user_id,
                 watch_id=watch.id,
                 type=AlertType.PRICE_DROP,
                 message=message,
@@ -162,6 +164,7 @@ def detect_and_notify(ext_refs_seen: set[str] | None = None) -> DetectionReport:
                     + (f" à {price_cents / 100:.2f} €" if price_cents else "")
                 )
                 alert = alert_repo.create(
+                    user_id=watch.user_id,
                     watch_id=watch.id,
                     type=AlertType.NEW_MATCH,
                     message=message,
@@ -173,23 +176,31 @@ def detect_and_notify(ext_refs_seen: set[str] | None = None) -> DetectionReport:
                 dispatch.append((alert.id, article.title, article.url, article.platform))
 
     # --- Envoi Discord (hors session pour ne pas la bloquer) -----------------
-    if dispatch and settings.discord_webhook_url:
-        for alert_id, title, url, platform in dispatch:
-            with session_scope() as session:
-                alert = session.get(Alert, alert_id)
-                if alert is None:
-                    continue
-                ok = send_alert(
-                    alert,
-                    article_title=title,
-                    article_url=url,
-                    article_platform=platform,
-                )
-                if ok:
-                    alert.sent_to_discord_at = utcnow()
-                    report.discord_sent += 1
-                else:
-                    report.discord_failed += 1
+    # Chaque alerte est routée vers le webhook du user propriétaire. Fallback
+    # sur le webhook admin global (`settings.discord_webhook_url`) si le user
+    # n'a pas configuré le sien. Si aucun des deux n'est disponible, skip.
+    for alert_id, title, url, platform in dispatch:
+        with session_scope() as session:
+            alert = session.get(Alert, alert_id)
+            if alert is None:
+                continue
+            user = session.get(User, alert.user_id) if alert.user_id else None
+            webhook_url = (user.discord_webhook_url if user else None) or settings.discord_webhook_url
+            if not webhook_url:
+                report.discord_failed += 1
+                continue
+            ok = send_alert(
+                alert,
+                article_title=title,
+                article_url=url,
+                article_platform=platform,
+                webhook_url=webhook_url,
+            )
+            if ok:
+                alert.sent_to_discord_at = utcnow()
+                report.discord_sent += 1
+            else:
+                report.discord_failed += 1
 
     logger.info(
         f"[alerts] {report.price_drops} baisse(s), {report.new_matches} nouveau(x) match(es), "

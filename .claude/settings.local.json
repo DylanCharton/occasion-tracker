@@ -14,7 +14,28 @@
       "Bash(./.venv/Scripts/python.exe -m pytest)",
       "Bash(./.venv/Scripts/python.exe:*)",
       "Bash(curl:*)",
-      "Bash(sort -t= -k2 -n -u)"
+      "Bash(sort -t= -k2 -n -u)",
+      "Bash(find .:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(.venv/Scripts/python -c \"import sqlite3; conn = sqlite3.connect\\('data/easycash.db'\\); cur = conn.cursor\\(\\); cur.execute\\('SELECT COUNT\\(*\\) FROM watch'\\); print\\('watches:', cur.fetchone\\(\\)[0]\\); cur.execute\\('SELECT COUNT\\(*\\) FROM alert'\\); print\\('alerts:', cur.fetchone\\(\\)[0]\\); cur.execute\\('SELECT COUNT\\(*\\) FROM article'\\); print\\('articles:', cur.fetchone\\(\\)[0]\\); conn.close\\(\\)\")",
+      "Bash(.venv/Scripts/pip install *)",
+      "Bash(.venv/Scripts/alembic init *)",
+      "Bash(.venv/Scripts/alembic revision *)",
+      "Bash(.venv/Scripts/alembic stamp *)",
+      "Bash(.venv/Scripts/alembic upgrade *)",
+      "Bash(.venv/Scripts/python -c \"import sqlite3; conn = sqlite3.connect\\('data/easycash.db'\\); cur = conn.cursor\\(\\); cur.execute\\(\\\\\"SELECT name FROM sqlite_master WHERE type='table'\\\\\"\\); [print\\(r[0]\\) for r in cur.fetchall\\(\\)]; conn.close\\(\\)\")",
+      "Bash(.venv/Scripts/python -c ' *)",
+      "Bash(.venv/Scripts/python -m pytest tests/ -x -q)",
+      "Bash(.venv/Scripts/python -m pytest tests/ -q)",
+      "Bash(.venv/Scripts/pip show *)",
+      "WebSearch",
+      "WebFetch(domain:fr.shopping.rakuten.com)",
+      "Bash(DATABASE_URL=\"sqlite:///data/test_fresh.db\" .venv/Scripts/alembic upgrade head)",
+      "Bash(rm data/test_fresh.db)",
+      "Bash(git -C \"C:/Users/chartdy/Desktop/Perso/Scraper\" log --oneline -20)",
+      "Bash(git -C \"C:/Users/chartdy/Desktop/Perso/Scraper\" status --short)"
     ]
   }
 }

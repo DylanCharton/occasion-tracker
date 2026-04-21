@@ -8,6 +8,7 @@ from scraper.ui.helpers import (
     ArticleRepository,
     WatchRepository,
     category_options,
+    current_user_id,
     ensure_db,
     format_price,
     session_scope,
@@ -17,6 +18,7 @@ from scraper.ui.helpers import (
 st.set_page_config(page_title="Recherche — Easycash Tracker", layout="wide")
 
 ensure_db()
+uid = current_user_id()
 st.title("Recherche")
 st.caption("Filtre le catalogue local (seuls les articles déjà collectés sont visibles).")
 
@@ -70,7 +72,7 @@ if save_submitted:
         "only_active": only_active,
     }
     with session_scope() as session:
-        watch_repo = WatchRepository(session)
+        watch_repo = WatchRepository(session, user_id=uid)
         watch = watch_repo.add_search_watch(criteria)
         watch_id = watch.id
     st.success(
@@ -81,7 +83,7 @@ if save_submitted:
 if submitted or True:  # on affiche aussi un premier écran par défaut
     with session_scope() as session:
         repo = ArticleRepository(session)
-        watch_repo = WatchRepository(session)
+        watch_repo = WatchRepository(session, user_id=uid)
         results = repo.search(
             query=query or None,
             category=None if category == "(toutes)" else category,
@@ -129,7 +131,7 @@ if submitted or True:  # on affiche aussi un premier écran par défaut
             else:
                 if cols[4].button("Suivre", key=f"watch_{row['id']}"):
                     with session_scope() as session:
-                        watch_repo = WatchRepository(session)
+                        watch_repo = WatchRepository(session, user_id=uid)
                         watch_repo.add_article_watch(row["id"])
                     st.rerun()
 

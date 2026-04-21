@@ -10,11 +10,12 @@ import streamlit as st
 
 from scraper.config import settings
 from scraper.core.categories import CATEGORIES, CATEGORIES_BY_SLUG
-from scraper.db.models import Article, PriceSnapshot
+from scraper.db.models import Article, PriceSnapshot, User
 from scraper.db.repository import (
     AlertRepository,
     ArticleRepository,
     ScheduledJobRepository,
+    UserRepository,
     WatchRepository,
 )
 from scraper.db.session import init_db, session_scope
@@ -27,6 +28,68 @@ from scraper.services.scraper_service import scrape_category
 def ensure_db() -> None:
     """Initialise la DB (idempotent) au démarrage d'une page."""
     init_db()
+
+
+def _authenticated_email() -> str | None:
+    """Retourne l'email du viewer Streamlit Cloud, ou None si pas loggé.
+
+    Supporte les deux APIs (st.user récent et st.experimental_user plus ancien).
+    Renvoie None en local (pas de Viewer authentication configurée).
+    """
+    for attr in ("user", "experimental_user"):
+        user = getattr(st, attr, None)
+        if user is None:
+            continue
+        try:
+            email = getattr(user, "email", None)
+        except Exception:
+            email = None
+        if email:
+            return str(email)
+    return None
+
+
+def _resolve_email() -> str:
+    """Email effectif du user : SSO Streamlit, sinon fallback dev."""
+    email = _authenticated_email()
+    if email:
+        return email
+    return settings.dev_user_email
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _user_snapshot(email: str) -> tuple[int, str, bool]:
+    """Get-or-create le user et mémorise (id, email, is_admin) 60s.
+
+    Cache-friendly : évite un roundtrip DB à chaque rerun Streamlit. La TTL
+    de 60s permet qu'une promotion admin soit visible rapidement.
+    """
+    email_norm = email.lower().strip()
+    is_admin = email_norm in settings.admin_emails_set
+    with session_scope() as session:
+        user = UserRepository(session).get_or_create(email_norm, is_admin=is_admin)
+        # Assure la promotion si l'email vient d'être ajouté à admin_emails
+        if is_admin and not user.is_admin:
+            user.is_admin = True
+        return user.id, user.email, user.is_admin
+
+
+def current_user_id() -> int:
+    """Id du user courant (SSO Streamlit Cloud ou fallback local)."""
+    uid, _, _ = _user_snapshot(_resolve_email())
+    return uid
+
+
+def current_user() -> User:
+    """Objet User courant (détaché — sûr à utiliser hors session)."""
+    uid, email, is_admin = _user_snapshot(_resolve_email())
+    user = User(id=uid, email=email, is_admin=is_admin)
+    return user
+
+
+def is_admin() -> bool:
+    _, _, admin = _user_snapshot(_resolve_email())
+    return admin
 
 
 @st.cache_resource(show_spinner=False)
@@ -113,12 +176,17 @@ def category_format(slug: str) -> str:
 
 def sidebar_footer() -> None:
     st.sidebar.markdown("---")
+    user = current_user()
+    badge = " · admin" if user.is_admin else ""
+    st.sidebar.caption(f"Connecté : **{user.email}**{badge}")
     st.sidebar.caption(f"Easycash Tracker — {settings.base_url}")
-    st.sidebar.caption(f"DB : `{settings.database_url.split('///')[-1]}`")
 
 
 __all__ = [
     "ensure_db",
+    "current_user",
+    "current_user_id",
+    "is_admin",
     "get_scheduler",
     "format_price",
     "format_pct",
@@ -133,7 +201,9 @@ __all__ = [
     "WatchRepository",
     "AlertRepository",
     "ScheduledJobRepository",
+    "UserRepository",
     "SchedulerService",
     "Article",
     "PriceSnapshot",
+    "User",
 ]

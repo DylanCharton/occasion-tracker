@@ -50,6 +50,24 @@ class AlertType(str, Enum):
     DISAPPEARED = "DISAPPEARED"
 
 
+class User(Base):
+    """Compte utilisateur (identifié par email SSO Google/Streamlit Cloud)."""
+
+    __tablename__ = "app_user"  # "user" est un mot réservé en PostgreSQL
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(256), unique=True, index=True)
+    discord_webhook_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    watches: Mapped[list["Watch"]] = relationship(back_populates="user")
+    alerts: Mapped[list["Alert"]] = relationship(back_populates="user")
+
+    def __repr__(self) -> str:
+        return f"<User id={self.id} email={self.email} admin={self.is_admin}>"
+
+
 class Article(Base):
     __tablename__ = "article"
 
@@ -104,6 +122,9 @@ class Watch(Base):
     __tablename__ = "watch"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("app_user.id", ondelete="CASCADE"), index=True
+    )
     type: Mapped[str] = mapped_column(String(16))  # WatchType
     article_id: Mapped[int | None] = mapped_column(
         ForeignKey("article.id", ondelete="CASCADE"), nullable=True
@@ -114,6 +135,7 @@ class Watch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    user: Mapped[User] = relationship(back_populates="watches")
     article: Mapped[Article | None] = relationship(back_populates="watches")
     alerts: Mapped[list["Alert"]] = relationship(back_populates="watch", cascade="all, delete-orphan")
 
@@ -122,6 +144,9 @@ class Alert(Base):
     __tablename__ = "alert"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("app_user.id", ondelete="CASCADE"), index=True
+    )
     watch_id: Mapped[int] = mapped_column(ForeignKey("watch.id", ondelete="CASCADE"), index=True)
     article_id: Mapped[int | None] = mapped_column(
         ForeignKey("article.id", ondelete="SET NULL"), nullable=True
@@ -134,6 +159,7 @@ class Alert(Base):
     sent_to_discord_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     read: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    user: Mapped[User] = relationship(back_populates="alerts")
     watch: Mapped[Watch] = relationship(back_populates="alerts")
 
 
@@ -164,6 +190,7 @@ class ScheduledJob(Base):
 
 __all__ = [
     "Base",
+    "User",
     "Article",
     "PriceSnapshot",
     "Watch",

@@ -9,6 +9,7 @@ import streamlit as st
 from scraper.ui.helpers import (
     ArticleRepository,
     WatchRepository,
+    current_user_id,
     ensure_db,
     format_datetime,
     format_price,
@@ -20,6 +21,7 @@ from scraper.ui.helpers import (
 st.set_page_config(page_title="Watchlist — Easycash Tracker", layout="wide")
 
 ensure_db()
+uid = current_user_id()
 st.title("Watchlist")
 st.caption("Les articles que tu suis et leur évolution de prix.")
 
@@ -36,7 +38,7 @@ if selected_id_raw:
 def show_detail(article_id: int) -> None:
     with session_scope() as session:
         repo = ArticleRepository(session)
-        watch_repo = WatchRepository(session)
+        watch_repo = WatchRepository(session, user_id=uid)
         article = repo.get(article_id)
         if article is None:
             st.error("Article introuvable.")
@@ -84,14 +86,14 @@ def show_detail(article_id: int) -> None:
     if is_watched:
         if top[3].button("Retirer", use_container_width=True):
             with session_scope() as session:
-                watch_repo = WatchRepository(session)
+                watch_repo = WatchRepository(session, user_id=uid)
                 watch_repo.remove_article(article_view["id"])
             st.query_params.clear()
             st.rerun()
     else:
         if top[3].button("Suivre", use_container_width=True):
             with session_scope() as session:
-                watch_repo = WatchRepository(session)
+                watch_repo = WatchRepository(session, user_id=uid)
                 watch_repo.add_article_watch(article_view["id"])
             st.rerun()
 
@@ -131,7 +133,7 @@ def show_detail(article_id: int) -> None:
                 saved = c3.form_submit_button("Enregistrer", use_container_width=True)
             if saved:
                 with session_scope() as session:
-                    watch_repo = WatchRepository(session)
+                    watch_repo = WatchRepository(session, user_id=uid)
                     watch_repo.update_thresholds(
                         watch_view["id"],
                         threshold_drop_pct=(new_pct / 100.0) if new_pct > 0 else None,

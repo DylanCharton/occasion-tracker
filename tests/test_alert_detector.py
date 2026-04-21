@@ -15,6 +15,7 @@ from scraper.db.models import (
     Article,
     Base,
     PriceSnapshot,
+    User,
     Watch,
     WatchType,
     utcnow,
@@ -23,7 +24,11 @@ from scraper.db.models import (
 
 @pytest.fixture
 def patch_session(monkeypatch):
-    """Remplace session_scope dans alert_detector par une SQLite en mémoire partagée."""
+    """Remplace session_scope dans alert_detector par une SQLite en mémoire partagée.
+
+    Crée aussi un user de test partagé par défaut, exposé via
+    `patch_session.user_id` pour le passer dans les Watch créés en test.
+    """
     engine = create_engine("sqlite:///:memory:", future=True)
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
@@ -42,10 +47,18 @@ def patch_session(monkeypatch):
         finally:
             s.close()
 
-    # Patche les deux imports qui utilisent session_scope
     import scraper.services.alert_detector as mod
 
     monkeypatch.setattr(mod, "session_scope", scope)
+
+    s = SessionLocal()
+    user = User(email="test@example.com", is_admin=False)
+    s.add(user)
+    s.commit()
+    user_id = user.id
+    s.close()
+
+    SessionLocal.user_id = user_id  # exposé aux tests pour attacher les Watch
     yield SessionLocal
     engine.dispose()
 
@@ -88,6 +101,7 @@ def test_price_drop_triggers_alert_above_threshold(patch_session):
     _add_snapshot(session, article, price_cents=5000, offset_minutes=-10)
     _add_snapshot(session, article, price_cents=4000, offset_minutes=0)
     watch = Watch(
+        user_id=patch_session.user_id,
         type=WatchType.ARTICLE.value,
         article_id=article.id,
         threshold_drop_pct=0.05,
@@ -119,6 +133,7 @@ def test_price_drop_below_threshold_no_alert(patch_session):
     _add_snapshot(session, article, price_cents=5000, offset_minutes=-10)
     _add_snapshot(session, article, price_cents=4900, offset_minutes=0)  # -2%
     watch = Watch(
+        user_id=patch_session.user_id,
         type=WatchType.ARTICLE.value,
         article_id=article.id,
         threshold_drop_pct=0.05,
@@ -143,6 +158,7 @@ def test_price_drop_absolute_threshold_triggers(patch_session):
     _add_snapshot(session, article, price_cents=3100, offset_minutes=-10)
     _add_snapshot(session, article, price_cents=3000, offset_minutes=0)  # seulement -3%
     watch = Watch(
+        user_id=patch_session.user_id,
         type=WatchType.ARTICLE.value,
         article_id=article.id,
         threshold_drop_pct=0.10,  # 10%, non atteint
@@ -168,6 +184,7 @@ def test_price_drop_not_duplicated(patch_session):
     _add_snapshot(session, article, price_cents=5000, offset_minutes=-10)
     _add_snapshot(session, article, price_cents=4000, offset_minutes=0)
     watch = Watch(
+        user_id=patch_session.user_id,
         type=WatchType.ARTICLE.value,
         article_id=article.id,
         threshold_drop_pct=0.05,
@@ -196,6 +213,7 @@ def test_inactive_watch_does_not_trigger(patch_session):
     _add_snapshot(session, article, price_cents=5000, offset_minutes=-10)
     _add_snapshot(session, article, price_cents=4000, offset_minutes=0)
     watch = Watch(
+        user_id=patch_session.user_id,
         type=WatchType.ARTICLE.value,
         article_id=article.id,
         threshold_drop_pct=0.05,
@@ -219,6 +237,7 @@ def test_search_watch_matches_new_article(patch_session):
     article = _create_article(session, title="Zelda Breath of the Wild Switch", platform="Switch")
     _add_snapshot(session, article, price_cents=2999, offset_minutes=0)
     watch = Watch(
+        user_id=patch_session.user_id,
         type=WatchType.SEARCH.value,
         query_json='{"query": "zelda", "platform": "Switch"}',
         active=True,
@@ -257,6 +276,7 @@ def test_search_watch_skips_old_articles(patch_session):
     session.flush()
     _add_snapshot(session, article, price_cents=1999, offset_minutes=0)
     watch = Watch(
+        user_id=patch_session.user_id,
         type=WatchType.SEARCH.value,
         query_json='{"query": "zelda"}',
         active=True,
@@ -279,6 +299,7 @@ def test_search_watch_not_duplicated(patch_session):
     article = _create_article(session, title="Mario Odyssey Switch", platform="Switch")
     _add_snapshot(session, article, price_cents=2999, offset_minutes=0)
     watch = Watch(
+        user_id=patch_session.user_id,
         type=WatchType.SEARCH.value,
         query_json='{"query": "mario", "platform": "Switch"}',
         active=True,

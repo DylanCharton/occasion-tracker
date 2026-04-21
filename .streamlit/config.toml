@@ -1,0 +1,9 @@
+[theme]
+base = "dark"
+
+[server]
+# Streamlit Cloud override ces valeurs, c'est surtout utile en local.
+headless = true
+
+[browser]
+gatherUsageStats = false

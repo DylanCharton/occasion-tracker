@@ -96,7 +96,7 @@ python -m scraper.cli init-db             # Initialiser la base de données
 |---|---|
 | Interface web | Streamlit |
 | Graphiques | Plotly |
-| Base de données | SQLite (via SQLAlchemy 2.0) |
+| Base de données | SQLite (local) / PostgreSQL — Supabase (cloud) — via SQLAlchemy 2.0 + Alembic |
 | Client HTTP | httpx (async, HTTP/2) |
 | Notifications | discord-webhook |
 | Planificateur | APScheduler |
@@ -106,3 +106,41 @@ python -m scraper.cli init-db             # Initialiser la base de données
 ## Limitations connues
 
 L'**état du produit** (Très bon / Bon / Correct), le **magasin** et le **commentaire vendeur** ne sont pas exposés par Easycash sur le web public. L'outil suit les **prix catalogue**, la **présence/disparition** des articles et détecte les **baisses de prix**.
+
+## Déploiement (optionnel) — Streamlit Cloud + Supabase
+
+Permet à un petit cercle (famille, amis) d'accéder à l'app en ligne. Le **catalogue est partagé** (un seul scheduler mutualisé), les **watchlists et alertes sont privées par utilisateur**.
+
+### 1. Base de données Supabase
+
+1. Crée un projet sur [supabase.com](https://supabase.com) (free tier : 500 MB, largement suffisant)
+2. Dans **Settings > Database > Connection string**, prends la **Session pooler** (port 5432) et copie-la
+3. Remplace `[YOUR-PASSWORD]` par le mot de passe défini à la création
+4. Adapte le scheme pour SQLAlchemy : `postgresql+psycopg2://...`
+
+### 2. Appliquer les migrations Alembic vers Supabase
+
+Depuis ton poste local, avec l'URL Supabase :
+
+```bash
+export DATABASE_URL="postgresql+psycopg2://postgres.xxx:PASS@...pooler.supabase.com:5432/postgres"
+alembic upgrade head
+```
+
+Cela crée les tables et le user admin initial (défini par `ADMIN_EMAILS`).
+
+### 3. Déployer sur Streamlit Cloud
+
+1. Push ton repo sur GitHub (privé recommandé)
+2. Sur [streamlit.io/cloud](https://streamlit.io/cloud), connecte ton GitHub et crée une app pointant sur `streamlit_app.py`
+3. Dans **Settings > Secrets**, colle le contenu de `.streamlit/secrets.toml.example` en remplaçant les valeurs (voir ce fichier pour les clés à renseigner)
+4. Dans **Settings > Sharing**, active **Viewer authentication** (SSO Google) et whitelist les emails de tes proches
+
+### 4. Maintenir l'app éveillée (facultatif)
+
+Streamlit Cloud met l'app en veille après 7 jours sans visite → le scheduler s'arrête. Pour éviter ça, crée un cron externe (GitHub Actions, cron-job.org) qui pingue l'URL de l'app tous les 5-6 jours.
+
+### Modèle multi-user
+
+- **Admin** (emails listés dans `ADMIN_EMAILS`) : planifie les rafraîchissements du catalogue, gère les slugs custom, voit la liste des utilisateurs
+- **User standard** : recherche, watchlist privée, alertes privées, webhook Discord personnel (configurable dans *Paramètres > Mes paramètres*)

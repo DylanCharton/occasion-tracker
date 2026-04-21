@@ -13,10 +13,12 @@ from scraper.ui.helpers import (
     WatchRepository,
     category_format,
     category_options,
+    current_user_id,
     ensure_db,
     format_datetime,
     format_price,
     get_scheduler,
+    is_admin,
     price_change_pct,
     run_full_scrape,
     run_scrape,
@@ -42,10 +44,12 @@ st.caption("Suivi de prix occasion — jeu vidéo")
 
 # --- Métriques principales -------------------------------------------------
 
+uid = current_user_id()
+
 with session_scope() as session:
     repo = ArticleRepository(session)
-    watch_repo = WatchRepository(session)
-    alert_repo = AlertRepository(session)
+    watch_repo = WatchRepository(session, user_id=uid)
+    alert_repo = AlertRepository(session, user_id=uid)
 
     total_articles = repo.count()
     total_watches = watch_repo.count_active()
@@ -85,62 +89,63 @@ c3.metric("Alertes non lues", total_unread_alerts)
 
 st.divider()
 
-# --- Rafraîchissement manuel ----------------------------------------------
+# --- Rafraîchissement manuel (admin-only) ---------------------------------
 
-st.subheader("Analyse du catalogue")
-st.caption(
-    "Collecte **tous** les articles du catalogue Easycash pour les plateformes sélectionnées. "
-    "Les prix sont historisés à chaque passage."
-)
+if is_admin():
+    st.subheader("⚙️ Analyse du catalogue")
+    st.caption(
+        "Collecte **tous** les articles du catalogue Easycash pour les plateformes sélectionnées. "
+        "Les prix sont historisés à chaque passage."
+    )
 
-DEFAULT_PLATFORMS = ["PS5", "PS4", "DS", "3DS", "Switch", "Switch 2"]
-selected_platforms = st.multiselect(
-    "Plateformes",
-    options=AVAILABLE_PLATFORMS,
-    default=[p for p in DEFAULT_PLATFORMS if p in AVAILABLE_PLATFORMS],
-)
+    DEFAULT_PLATFORMS = ["PS5", "PS4", "DS", "3DS", "Switch", "Switch 2"]
+    selected_platforms = st.multiselect(
+        "Plateformes",
+        options=AVAILABLE_PLATFORMS,
+        default=[p for p in DEFAULT_PLATFORMS if p in AVAILABLE_PLATFORMS],
+    )
 
-if st.button("Lancer l'analyse", use_container_width=True, type="primary", disabled=not selected_platforms):
-    with st.spinner(f"Collecte de {len(selected_platforms)} plateforme(s) en cours..."):
-        try:
-            result = run_full_scrape(selected_platforms)
-            st.success(
-                f"✅ **{result['unique']}** articles uniques · "
-                f"{result['created']} nouveaux · {result['updated']} mis à jour · "
-                f"{result['snapshots']} snapshots · {result['queries']} plateforme(s)"
-            )
-        except Exception as exc:
-            st.error(f"Erreur : {exc}")
-
-st.divider()
-
-st.subheader("Rafraîchir une catégorie (vitrine)")
-st.caption("Collecte rapide de la vitrine Easycash (~30 articles par sous-catégorie).")
-
-with st.expander("Rafraîchissement rapide", expanded=False):
-    with st.form("refresh_form"):
-        col1, col2 = st.columns([4, 1])
-        category = col1.selectbox(
-            "Catégorie",
-            options=category_options(),
-            index=category_options().index("jeux-video"),
-            format_func=category_format,
-        )
-        pages = col2.number_input("Pages", min_value=1, max_value=5, value=2, step=1)
-        submitted = st.form_submit_button("Rafraîchir", use_container_width=True)
-
-    if submitted:
-        with st.spinner(f"Scraping de {category}..."):
+    if st.button(
+        "Lancer l'analyse",
+        use_container_width=True,
+        type="primary",
+        disabled=not selected_platforms,
+    ):
+        with st.spinner(f"Collecte de {len(selected_platforms)} plateforme(s) en cours..."):
             try:
-                result = run_scrape(category, int(pages))
+                result = run_full_scrape(selected_platforms)
                 st.success(
                     f"✅ **{result['unique']}** articles uniques · "
-                    f"{result['created']} nouveaux · {result['updated']} mis à jour"
+                    f"{result['created']} nouveaux · {result['updated']} mis à jour · "
+                    f"{result['snapshots']} snapshots · {result['queries']} plateforme(s)"
                 )
             except Exception as exc:
                 st.error(f"Erreur : {exc}")
 
-st.divider()
+    with st.expander("Rafraîchissement rapide d'une catégorie (vitrine)", expanded=False):
+        with st.form("refresh_form"):
+            col1, col2 = st.columns([4, 1])
+            category = col1.selectbox(
+                "Catégorie",
+                options=category_options(),
+                index=category_options().index("jeux-video"),
+                format_func=category_format,
+            )
+            pages = col2.number_input("Pages", min_value=1, max_value=5, value=2, step=1)
+            submitted = st.form_submit_button("Rafraîchir", use_container_width=True)
+
+        if submitted:
+            with st.spinner(f"Scraping de {category}..."):
+                try:
+                    result = run_scrape(category, int(pages))
+                    st.success(
+                        f"✅ **{result['unique']}** articles uniques · "
+                        f"{result['created']} nouveaux · {result['updated']} mis à jour"
+                    )
+                except Exception as exc:
+                    st.error(f"Erreur : {exc}")
+
+    st.divider()
 
 # --- Prochaines exécutions planifiées -------------------------------------
 

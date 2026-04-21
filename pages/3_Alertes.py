@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import streamlit as st
 
-from scraper.db.models import Alert
+from scraper.config import settings
+from scraper.db.models import Alert, User
 from scraper.services.discord_notifier import send_alert
 from scraper.ui.helpers import (
     AlertRepository,
     ArticleRepository,
+    current_user_id,
     ensure_db,
     format_datetime,
     format_price,
@@ -19,6 +21,7 @@ from scraper.ui.helpers import (
 st.set_page_config(page_title="Alertes — Easycash Tracker", layout="wide")
 
 ensure_db()
+uid = current_user_id()
 st.title("Alertes")
 st.caption(
     "Historique des baisses détectées et matches de recherche. "
@@ -26,7 +29,7 @@ st.caption(
 )
 
 with session_scope() as session:
-    alert_repo = AlertRepository(session)
+    alert_repo = AlertRepository(session, user_id=uid)
     article_repo = ArticleRepository(session)
     alerts = alert_repo.list_recent(limit=100)
     rows = []
@@ -57,13 +60,17 @@ if not rows:
 
 def mark_as_read(alert_id: int) -> None:
     with session_scope() as session:
-        AlertRepository(session).mark_read(alert_id)
+        AlertRepository(session, user_id=uid).mark_read(alert_id)
 
 
 def resend_to_discord(alert_id: int) -> bool:
     with session_scope() as session:
         alert = session.get(Alert, alert_id)
-        if alert is None:
+        if alert is None or alert.user_id != uid:
+            return False
+        user = session.get(User, uid)
+        webhook_url = (user.discord_webhook_url if user else None) or settings.discord_webhook_url
+        if not webhook_url:
             return False
         article_repo = ArticleRepository(session)
         article = article_repo.get(alert.article_id) if alert.article_id else None
@@ -72,6 +79,7 @@ def resend_to_discord(alert_id: int) -> bool:
             article_title=article.title if article else None,
             article_url=article.url if article else None,
             article_platform=article.platform if article else None,
+            webhook_url=webhook_url,
         )
         if ok:
             from scraper.db.models import utcnow
