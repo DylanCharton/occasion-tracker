@@ -11,6 +11,8 @@ from scraper.ui.helpers import (
     current_user_id,
     ensure_db,
     format_price,
+    is_readonly,
+    require_auth,
     session_scope,
     sidebar_footer,
 )
@@ -18,6 +20,7 @@ from scraper.ui.helpers import (
 st.set_page_config(page_title="Recherche — Easycash Tracker", layout="wide")
 
 ensure_db()
+require_auth()
 uid = current_user_id()
 st.title("Recherche")
 st.caption("Filtre le catalogue local (seuls les articles déjà collectés sont visibles).")
@@ -58,6 +61,8 @@ with st.form("search_form"):
     save_submitted = cols_btn[1].form_submit_button(
         "💾 Enregistrer cette recherche (alerte nouveau match)",
         use_container_width=True,
+        disabled=is_readonly(),
+        help="Désactivé en mode démo" if is_readonly() else None,
     )
 
 # --- Résultats -------------------------------------------------------------
@@ -129,7 +134,12 @@ if submitted or True:  # on affiche aussi un premier écran par défaut
             if row["watched"]:
                 cols[4].success("✓ Suivi")
             else:
-                if cols[4].button("Suivre", key=f"watch_{row['id']}"):
+                if cols[4].button(
+                    "Suivre",
+                    key=f"watch_{row['id']}",
+                    disabled=is_readonly(),
+                    help="Désactivé en mode démo" if is_readonly() else None,
+                ):
                     with session_scope() as session:
                         watch_repo = WatchRepository(session, user_id=uid)
                         watch_repo.add_article_watch(row["id"])

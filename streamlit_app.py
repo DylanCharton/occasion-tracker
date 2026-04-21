@@ -19,7 +19,10 @@ from scraper.ui.helpers import (
     format_price,
     get_scheduler,
     is_admin,
+    is_demo_mode,
+    is_readonly,
     price_change_pct,
+    require_auth,
     run_full_scrape,
     run_scrape,
     AVAILABLE_PLATFORMS,
@@ -36,11 +39,18 @@ st.set_page_config(
 )
 
 ensure_db()
+require_auth()
 # Démarre le scheduler (idempotent, singleton via cache_resource)
 scheduler = get_scheduler()
 
 st.title("Easycash Tracker")
 st.caption("Suivi de prix occasion — jeu vidéo")
+
+if is_demo_mode():
+    st.info(
+        "🧪 **Mode démo** — tu consultes la vitrine publique en lecture seule. "
+        "[Connecte-toi](/) pour accéder à ta propre watchlist et tes alertes."
+    )
 
 # --- Métriques principales -------------------------------------------------
 
@@ -91,7 +101,7 @@ st.divider()
 
 # --- Rafraîchissement manuel (admin-only) ---------------------------------
 
-if is_admin():
+if is_admin() and not is_readonly():
     st.subheader("⚙️ Analyse du catalogue")
     st.caption(
         "Collecte **tous** les articles du catalogue Easycash pour les plateformes sélectionnées. "

@@ -13,7 +13,9 @@ from scraper.ui.helpers import (
     ensure_db,
     format_datetime,
     format_price,
+    is_readonly,
     price_change_pct,
+    require_auth,
     session_scope,
     sidebar_footer,
 )
@@ -21,6 +23,7 @@ from scraper.ui.helpers import (
 st.set_page_config(page_title="Watchlist — Easycash Tracker", layout="wide")
 
 ensure_db()
+require_auth()
 uid = current_user_id()
 st.title("Watchlist")
 st.caption("Les articles que tu suis et leur évolution de prix.")
@@ -83,15 +86,17 @@ def show_detail(article_id: int) -> None:
     top[1].markdown(f"**{format_price(last_price)}**")
     pct = price_change_pct(first_price, last_price)
     top[2].markdown(f"{pct:+.1%}" if pct is not None else "—")
+    ro = is_readonly()
+    ro_help = "Désactivé en mode démo" if ro else None
     if is_watched:
-        if top[3].button("Retirer", use_container_width=True):
+        if top[3].button("Retirer", use_container_width=True, disabled=ro, help=ro_help):
             with session_scope() as session:
                 watch_repo = WatchRepository(session, user_id=uid)
                 watch_repo.remove_article(article_view["id"])
             st.query_params.clear()
             st.rerun()
     else:
-        if top[3].button("Suivre", use_container_width=True):
+        if top[3].button("Suivre", use_container_width=True, disabled=ro, help=ro_help):
             with session_scope() as session:
                 watch_repo = WatchRepository(session, user_id=uid)
                 watch_repo.add_article_watch(article_view["id"])
@@ -130,7 +135,12 @@ def show_detail(article_id: int) -> None:
                     "Seuil prix max (€)", min_value=0.0, value=float(cur_abs), step=1.0,
                     help="0 = pas de seuil absolu"
                 )
-                saved = c3.form_submit_button("Enregistrer", use_container_width=True)
+                saved = c3.form_submit_button(
+                    "Enregistrer",
+                    use_container_width=True,
+                    disabled=is_readonly(),
+                    help="Désactivé en mode démo" if is_readonly() else None,
+                )
             if saved:
                 with session_scope() as session:
                     watch_repo = WatchRepository(session, user_id=uid)

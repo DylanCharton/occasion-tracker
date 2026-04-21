@@ -17,6 +17,8 @@ from scraper.ui.helpers import (
     format_datetime,
     get_scheduler,
     is_admin,
+    is_demo_mode,
+    require_auth,
     session_scope,
     sidebar_footer,
 )
@@ -24,10 +26,19 @@ from scraper.ui.helpers import (
 st.set_page_config(page_title="Paramètres — Easycash Tracker", layout="wide")
 
 ensure_db()
+require_auth()
 uid = current_user_id()
 user = current_user()
 
 st.title("Paramètres")
+
+if is_demo_mode():
+    st.info(
+        "🧪 Mode démo : les paramètres sont désactivés. "
+        "[Connecte-toi](/) pour configurer ton webhook Discord et tes alertes."
+    )
+    sidebar_footer()
+    st.stop()
 
 # --- Mes paramètres (tous les users) --------------------------------------
 

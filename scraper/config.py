@@ -99,12 +99,23 @@ class Settings(BaseSettings):
     # Auth / multi-user
     # Liste d'emails admins (CSV). Ces users reçoivent is_admin=True à la création.
     admin_emails: str = "d.charton@fimainfo.fr"
+    # Whitelist CSV des emails autorisés à se connecter. Vide = toute personne loggée
+    # via Google est acceptée (déconseillé en prod).
+    allowed_emails: str = ""
     # Email utilisé quand Streamlit tourne en local sans SSO (pas de st.user).
     dev_user_email: str = "d.charton@fimainfo.fr"
+    # Email du user "démo" (readonly, utilisé quand ?demo=1 est présent dans l'URL).
+    demo_user_email: str = "demo@local"
+    # Active/désactive l'exigence d'authentification. False en local pour dev sans SSO.
+    require_auth: bool = False
 
     @property
     def admin_emails_set(self) -> set[str]:
         return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
+
+    @property
+    def allowed_emails_set(self) -> set[str]:
+        return {e.strip().lower() for e in self.allowed_emails.split(",") if e.strip()}
 
     @classmethod
     def settings_customise_sources(

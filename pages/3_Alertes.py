@@ -14,6 +14,8 @@ from scraper.ui.helpers import (
     ensure_db,
     format_datetime,
     format_price,
+    is_readonly,
+    require_auth,
     session_scope,
     sidebar_footer,
 )
@@ -21,6 +23,7 @@ from scraper.ui.helpers import (
 st.set_page_config(page_title="Alertes — Easycash Tracker", layout="wide")
 
 ensure_db()
+require_auth()
 uid = current_user_id()
 st.title("Alertes")
 st.caption(
@@ -120,10 +123,18 @@ for r in rows:
         action_cols = st.columns([1, 1, 3, 1, 1])
         if r["article_id"]:
             action_cols[0].link_button("Détail", f"/Watchlist?article={r['article_id']}", use_container_width=True)
+        ro = is_readonly()
+        ro_help = "Désactivé en mode démo" if ro else None
         if r["sent_discord"]:
             action_cols[1].caption("📨 Discord envoyé")
         else:
-            if action_cols[1].button("Envoyer Discord", key=f"send_{r['id']}", use_container_width=True):
+            if action_cols[1].button(
+                "Envoyer Discord",
+                key=f"send_{r['id']}",
+                use_container_width=True,
+                disabled=ro,
+                help=ro_help,
+            ):
                 ok = resend_to_discord(r["id"])
                 if ok:
                     st.toast("Envoyé sur Discord", icon="✅")
@@ -131,7 +142,13 @@ for r in rows:
                     st.toast("Échec Discord (vérifie le webhook)", icon="⚠️")
                 st.rerun()
         if not r["read"]:
-            if action_cols[4].button("Marquer lu", key=f"read_{r['id']}", use_container_width=True):
+            if action_cols[4].button(
+                "Marquer lu",
+                key=f"read_{r['id']}",
+                use_container_width=True,
+                disabled=ro,
+                help=ro_help,
+            ):
                 mark_as_read(r["id"])
                 st.rerun()
         else:
